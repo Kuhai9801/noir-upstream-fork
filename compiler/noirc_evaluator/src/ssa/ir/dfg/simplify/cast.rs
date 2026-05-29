@@ -280,7 +280,8 @@ mod tests {
             constrain v0 == i8 -1
             v1 = cast v0 as u8
             v2 = cast v1 as i16
-            return v2
+            v3 = cast v1 as u16
+            return v2, v3
         }
         ";
 
@@ -291,7 +292,7 @@ mod tests {
         acir(inline) fn main f0 {
           b0(v0: i8):
             constrain v0 == i8 -1
-            return i16 255
+            return i16 255, u16 255
         }
         ");
     }
