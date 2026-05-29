@@ -290,7 +290,7 @@ mod tests {
         assert_ssa_snapshot!(ssa, @r"
         acir(inline) fn main f0 {
           b0(v0: i8):
-            constrain i8 -1 == i8 -1
+            constrain v0 == i8 -1
             return i16 255
         }
         ");
