@@ -134,7 +134,7 @@ fn is_widening_from_intermediate_integer(
 mod tests {
     use crate::{
         assert_ssa_snapshot,
-        ssa::{opt::constant_folding::DEFAULT_MAX_ITER, ssa_gen::Ssa},
+        ssa::{opt::CONSTANT_FOLDING_MAX_ITER, ssa_gen::Ssa},
     };
 
     #[test]
@@ -285,7 +285,7 @@ mod tests {
         ";
 
         let ssa = Ssa::from_str_simplifying(src).unwrap();
-        let ssa = ssa.fold_constants_using_constraints(DEFAULT_MAX_ITER);
+        let ssa = ssa.fold_constants_using_constraints(CONSTANT_FOLDING_MAX_ITER);
 
         assert_ssa_snapshot!(ssa, @r"
         acir(inline) fn main f0 {
