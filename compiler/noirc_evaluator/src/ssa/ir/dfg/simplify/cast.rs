@@ -28,9 +28,12 @@ pub(super) fn simplify_cast(
     }
 
     if let Value::Instruction { instruction, .. } = &dfg[value]
-        && let Instruction::Cast(original_value, _) = &dfg[*instruction]
+        && let Instruction::Cast(original_value, intermediate_typ) = &dfg[*instruction]
     {
         let original_value = *original_value;
+        if is_widening_from_intermediate_integer(*intermediate_typ, dst_typ) {
+            return None;
+        }
         return match simplify_cast(original_value, dst_typ, dfg) {
             None => SimplifiedToInstruction(Instruction::Cast(original_value, dst_typ)),
             simpler => simpler,
@@ -112,9 +115,27 @@ pub(super) fn simplify_cast(
     }
 }
 
+fn is_widening_from_intermediate_integer(
+    intermediate_typ: NumericType,
+    dst_typ: NumericType,
+) -> bool {
+    match (intermediate_typ, dst_typ) {
+        (
+            NumericType::Signed { bit_size: src_bit_size }
+            | NumericType::Unsigned { bit_size: src_bit_size },
+            NumericType::Signed { bit_size: dst_bit_size }
+            | NumericType::Unsigned { bit_size: dst_bit_size },
+        ) => src_bit_size < dst_bit_size,
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{assert_ssa_snapshot, ssa::ssa_gen::Ssa};
+    use crate::{
+        assert_ssa_snapshot,
+        ssa::{opt::constant_folding::DEFAULT_MAX_ITER, ssa_gen::Ssa},
+    };
 
     #[test]
     fn unsigned_u8_to_i8_safe() {
@@ -247,6 +268,30 @@ mod tests {
         acir(inline) predicate_pure fn main f0 {
           b0():
             return i8 -1
+        }
+        ");
+    }
+
+    #[test]
+    fn does_not_simplify_through_observable_truncating_cast_boundary() {
+        let src = "
+        acir(inline) fn main f0 {
+          b0(v0: i8):
+            constrain v0 == i8 -1
+            v1 = cast v0 as u8
+            v2 = cast v1 as i16
+            return v2
+        }
+        ";
+
+        let ssa = Ssa::from_str_simplifying(src).unwrap();
+        let ssa = ssa.fold_constants_using_constraints(DEFAULT_MAX_ITER);
+
+        assert_ssa_snapshot!(ssa, @r"
+        acir(inline) fn main f0 {
+          b0(v0: i8):
+            constrain i8 -1 == i8 -1
+            return i16 255
         }
         ");
     }
