@@ -1007,9 +1007,7 @@ pub fn compile_no_check(
     let validation_options_hash = options.validation_options_hash();
 
     if let Some(cached_program) = cached_program
-        && !force_compile
-        && cached_program.hash == hash
-        && cached_program.validation_options_hash == validation_options_hash
+        && can_reuse_cached_program(cached_program, hash, validation_options_hash, force_compile)
     {
         info!("Program matches existing artifact, returning early");
         return Ok(cached_program);
@@ -1041,6 +1039,17 @@ pub fn compile_no_check(
         noir_version: NOIR_ARTIFACT_VERSION_STRING.to_string(),
         warnings,
     })
+}
+
+fn can_reuse_cached_program(
+    cached_program: &CompiledProgram,
+    hash: u64,
+    validation_options_hash: u64,
+    force_compile: bool,
+) -> bool {
+    !force_compile
+        && cached_program.hash == hash
+        && cached_program.validation_options_hash == validation_options_hash
 }
 
 /// Specifies a contract function and extra metadata that
@@ -1144,6 +1153,9 @@ impl<F: AcirField> std::fmt::Display for ProgramDisplay<'_, F> {
 #[cfg(test)]
 mod tests {
     use super::CompileOptions;
+    use super::can_reuse_cached_program;
+    use noirc_artifacts::program::CompiledProgram;
+    use std::collections::BTreeMap;
 
     #[test]
     fn validation_options_hash_tracks_skipped_validation_checks() {
@@ -1156,5 +1168,23 @@ mod tests {
             strict_options.validation_options_hash(),
             skipped_options.validation_options_hash()
         );
+    }
+
+    #[test]
+    fn cached_program_reuse_requires_matching_validation_options_hash() {
+        let cached_program = CompiledProgram {
+            noir_version: String::new(),
+            hash: 1,
+            validation_options_hash: 2,
+            program: Default::default(),
+            abi: Default::default(),
+            debug: Vec::new(),
+            file_map: BTreeMap::new(),
+            warnings: Vec::new(),
+        };
+
+        assert!(can_reuse_cached_program(&cached_program, 1, 2, false));
+        assert!(!can_reuse_cached_program(&cached_program, 1, 3, false));
+        assert!(!can_reuse_cached_program(&cached_program, 1, 2, true));
     }
 }
