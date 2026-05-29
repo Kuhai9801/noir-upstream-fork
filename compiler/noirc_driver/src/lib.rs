@@ -1007,7 +1007,7 @@ pub fn compile_no_check(
     let validation_options_hash = options.validation_options_hash();
 
     if let Some(cached_program) = cached_program
-        && can_reuse_cached_program(cached_program, hash, validation_options_hash, force_compile)
+        && can_reuse_cached_program(&cached_program, hash, validation_options_hash, force_compile)
     {
         info!("Program matches existing artifact, returning early");
         return Ok(cached_program);
