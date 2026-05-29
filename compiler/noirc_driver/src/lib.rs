@@ -349,6 +349,15 @@ impl Default for CompileOptions {
 }
 
 impl CompileOptions {
+    pub fn validation_options_hash(&self) -> u64 {
+        rustc_hash::FxBuildHasher.hash_one((
+            self.skip_underconstrained_check,
+            self.skip_brillig_constraints_check,
+            self.brillig_constraints_check_max_array_output_length,
+            self.brillig_constraints_check_max_ancestor_distance,
+        ))
+    }
+
     pub fn as_ssa_options(&self, package_build_path: PathBuf) -> SsaEvaluatorOptions {
         SsaEvaluatorOptions {
             ssa_logging: if !self.show_ssa_pass.is_empty() {
@@ -995,10 +1004,12 @@ pub fn compile_no_check(
 
     // Hash the AST program, which is going to be used to fingerprint the compilation artifact.
     let hash = rustc_hash::FxBuildHasher.hash_one(&program);
+    let validation_options_hash = options.validation_options_hash();
 
     if let Some(cached_program) = cached_program
         && !force_compile
         && cached_program.hash == hash
+        && cached_program.validation_options_hash == validation_options_hash
     {
         info!("Program matches existing artifact, returning early");
         return Ok(cached_program);
@@ -1022,6 +1033,7 @@ pub fn compile_no_check(
 
     Ok(CompiledProgram {
         hash,
+        validation_options_hash,
         program,
         debug,
         abi,
@@ -1126,5 +1138,23 @@ impl<F: AcirField> std::fmt::Display for ProgramDisplay<'_, F> {
             })
             .collect::<HashMap<_, _>>();
         display_program(self.program, Some(&error_types), f)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CompileOptions;
+
+    #[test]
+    fn validation_options_hash_tracks_skipped_validation_checks() {
+        let strict_options = CompileOptions::default();
+        let mut skipped_options = strict_options.clone();
+        skipped_options.skip_underconstrained_check = true;
+        skipped_options.skip_brillig_constraints_check = true;
+
+        assert_ne!(
+            strict_options.validation_options_hash(),
+            skipped_options.validation_options_hash()
+        );
     }
 }
