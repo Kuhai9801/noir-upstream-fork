@@ -31,7 +31,7 @@ pub(super) fn simplify_cast(
         && let Instruction::Cast(original_value, intermediate_typ) = &dfg[*instruction]
     {
         let original_value = *original_value;
-        if is_widening_from_intermediate_integer(*intermediate_typ, dst_typ) {
+        if intermediate_integer_cast_boundary_is_observable(*intermediate_typ, dst_typ) {
             return None;
         }
         return match simplify_cast(original_value, dst_typ, dfg) {
@@ -115,17 +115,27 @@ pub(super) fn simplify_cast(
     }
 }
 
-fn is_widening_from_intermediate_integer(
+fn intermediate_integer_cast_boundary_is_observable(
     intermediate_typ: NumericType,
     dst_typ: NumericType,
 ) -> bool {
     match (intermediate_typ, dst_typ) {
         (
-            NumericType::Signed { bit_size: src_bit_size }
-            | NumericType::Unsigned { bit_size: src_bit_size },
-            NumericType::Signed { bit_size: dst_bit_size }
-            | NumericType::Unsigned { bit_size: dst_bit_size },
+            NumericType::Signed { bit_size: src_bit_size },
+            NumericType::Signed { bit_size: dst_bit_size },
+        )
+        | (
+            NumericType::Unsigned { bit_size: src_bit_size },
+            NumericType::Unsigned { bit_size: dst_bit_size },
         ) => src_bit_size < dst_bit_size,
+        (
+            NumericType::Signed { bit_size: src_bit_size },
+            NumericType::Unsigned { bit_size: dst_bit_size },
+        )
+        | (
+            NumericType::Unsigned { bit_size: src_bit_size },
+            NumericType::Signed { bit_size: dst_bit_size },
+        ) => src_bit_size <= dst_bit_size,
         _ => false,
     }
 }
@@ -293,6 +303,30 @@ mod tests {
           b0(v0: i8):
             constrain v0 == i8 -1
             return i16 255, u16 255
+        }
+        ");
+    }
+
+    #[test]
+    fn does_not_simplify_through_same_width_signedness_cast_boundary() {
+        let src = "
+        acir(inline) fn main f0 {
+          b0(v0: i8):
+            constrain v0 == i8 -1
+            v1 = cast v0 as u16
+            v2 = cast v1 as i16
+            return v2
+        }
+        ";
+
+        let ssa = Ssa::from_str_simplifying(src).unwrap();
+        let ssa = ssa.fold_constants_using_constraints(CONSTANT_FOLDING_MAX_ITER);
+
+        assert_ssa_snapshot!(ssa, @r"
+        acir(inline) fn main f0 {
+          b0(v0: i8):
+            constrain v0 == i8 -1
+            return i16 255
         }
         ");
     }
