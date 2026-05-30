@@ -350,12 +350,22 @@ impl Default for CompileOptions {
 
 impl CompileOptions {
     pub fn validation_options_hash(&self) -> u64 {
-        rustc_hash::FxBuildHasher.hash_one((
-            self.skip_underconstrained_check,
-            self.skip_brillig_constraints_check,
-            self.brillig_constraints_check_max_array_output_length,
-            self.brillig_constraints_check_max_ancestor_distance,
-        ))
+        let mut hash = 0xcbf2_9ce4_8422_2325;
+        fn write_hash(hash: &mut u64, bytes: &[u8]) {
+            for byte in bytes {
+                *hash ^= u64::from(*byte);
+                *hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+
+        write_hash(&mut hash, &[self.skip_underconstrained_check as u8]);
+        write_hash(&mut hash, &[self.skip_brillig_constraints_check as u8]);
+        write_hash(
+            &mut hash,
+            &self.brillig_constraints_check_max_array_output_length.to_le_bytes(),
+        );
+        write_hash(&mut hash, &self.brillig_constraints_check_max_ancestor_distance.to_le_bytes());
+        hash
     }
 
     pub fn as_ssa_options(&self, package_build_path: PathBuf) -> SsaEvaluatorOptions {
